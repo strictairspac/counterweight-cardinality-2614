@@ -27,3 +27,11 @@ class CaseEntry(CaseInput):
     id: int
     code: str
     created_by: str
+
+
+class CaseDetail(CaseEntry):
+    withdrawals: list[dict] = Field(default_factory=list)
+    withdrawn_pairs: list[dict] = Field(default_factory=list)
+    withdrawn: bool = False
+    has_withdrawal: bool = False
+    withdrawal_status: str = "none"

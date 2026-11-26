@@ -1,6 +1,6 @@
 from redis.exceptions import RedisError
 from src.config.resources import cache, engine
-from src.services import cases, runs, reviews
+from src.services import cases, runs, reviews, withdrawals
 
 
 def new_case(data, user):
@@ -23,3 +23,12 @@ def new_run(case_id, data, user):
 def new_review(run_id, data, user):
     with engine.begin() as db:
         return reviews.sign(db, run_id, data, user["username"])
+
+
+def register_withdrawal(case_id, data, user):
+    with engine.begin() as db:
+        return withdrawals.register(db, case_id, data, user["username"])
+
+
+new_withdrawal = register_withdrawal
+withdraw_basis = register_withdrawal

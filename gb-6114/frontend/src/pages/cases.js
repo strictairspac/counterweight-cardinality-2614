@@ -5,6 +5,7 @@ import { table } from "../components/common/table.js";
 import { submit } from "../hooks/submit.js";
 import { navigate } from "../router/router.js";
 import { el } from "../utils/dom.js";
+import { time } from "../utils/format.js";
 
 function queueForm(config, selected) {
   const form = el("form", {class: "queue-form"},
@@ -40,9 +41,69 @@ function registration(config, selected) {
   return form;
 }
 
+function bandOptions(selected, key) {
+  const payload = selected.payload || {};
+  const groups = [payload.calibration, payload.inspection, payload.checks]
+    .filter(Array.isArray)
+    .flat();
+  return [...new Set(groups.map(item => item?.[key]).filter(value => typeof value === "string"))];
+}
+
+function withdrawalTable(items) {
+  if (!items.length) return empty("尚未登记档位实测依据撤回。");
+  return table(["重量档", "槽宽档", "撤回原因", "登记人", "登记时间"], items.map(item => [
+    item.mass,
+    item.slot,
+    item.reason || "—",
+    item.actor,
+    time(item.created_at),
+  ]), "已撤回的档位对");
+}
+
+function withdrawalPanel(selected, items, canWithdraw) {
+  if (!selected) return null;
+  const listHost = el("div", {}, withdrawalTable(items));
+  const notice = el("p", {role: "status", class: "withdrawal-success"});
+  const massId = `mass-options-${selected.id}`;
+  const slotId = `slot-options-${selected.id}`;
+  const form = el("form", {id: "withdrawal-form", class: "withdrawal-form"},
+    el("div", {class: "form-grid"},
+      field("重量档", el("input", {
+        name: "mass", required: true, maxlength: 24, list: massId, placeholder: "例如：重档",
+      })),
+      field("槽宽档", el("input", {
+        name: "slot", required: true, maxlength: 24, list: slotId, placeholder: "例如：宽槽",
+      })),
+      el("datalist", {id: massId}, bandOptions(selected, "mass").map(value => el("option", {value}))),
+      el("datalist", {id: slotId}, bandOptions(selected, "slot").map(value => el("option", {value})))),
+    field("撤回原因（可选）", el("input", {name: "reason", maxlength: 500, placeholder: "供货方撤回该档位对的实测依据"})),
+    errorText(),
+    notice,
+    el("button", {type: "submit"}, "登记撤回"));
+
+  submit(form, async values => {
+    notice.textContent = "";
+    const created = await api.withdrawBasis(selected.id, {
+      mass: values.get("mass"),
+      slot: values.get("slot"),
+      reason: values.get("reason") || "",
+    });
+    form.reset();
+    const latest = await api.withdrawals(selected.id);
+    listHost.replaceChildren(withdrawalTable(latest));
+    notice.textContent = `撤回登记 ${created.code || `#${created.id}`} 已生效，相关容量证明立即失效。`;
+  });
+
+  return section("实测依据撤回",
+    el("p", {}, "登记后，所有查过该重量档/槽宽档组合的容量证明立即失效；查询结果为 0 也同样受影响。原始证明和签章会保留。"),
+    listHost,
+    canWithdraw ? form : empty("当前账号可查看撤回记录，登记撤回需要资料操作员权限。"));
+}
+
 export async function casesPage(config, user, route) {
   const cases = await api.cases();
   const selected = cases.find(item => item.id === route.id) ?? cases.at(-1);
+  const withdrawals = selected ? await api.withdrawals(selected.id) : [];
   const operator = user.role === "operator";
   return el("div", {class: "page"},
     pageHeading(config.modules[1], `${config.unit} · ${config.fixture}`),
@@ -55,5 +116,6 @@ export async function casesPage(config, user, route) {
         [el("p", {}, selected.description), operator ? queueForm(config, selected) : empty("当前账号可查看此资料。"),
           el("details", {}, el("summary", {}, "查看业务数据"), el("pre", {}, JSON.stringify(selected.payload, null, 2)))] :
         empty("先登记一条资料，再提交执行。")),
-      operator ? section("登记新资料", registration(config, selected)) : null));
+      operator ? section("登记新资料", registration(config, selected)) : null)),
+    withdrawalPanel(selected, withdrawals, operator));
 }

@@ -7,7 +7,7 @@ from src.constants.job_state import JobState
 from src.domain.scenario import CONFIG
 from src.models.cases import cases
 from src.models.runs import runs
-from . import audit, cases as case_service
+from . import audit, cases as case_service, withdrawals as withdrawal_service
 
 
 def query():
@@ -18,11 +18,24 @@ def get(db, run_id):
     run = db.execute(query().where(runs.c.id == run_id)).mappings().first()
     if run is None:
         raise HTTPException(404, "执行批次不存在")
-    return dict(run)
+    entry = dict(run)
+    withdrawal_service.annotate_run(db, entry)
+    return entry
 
 
 def list_entries(db):
-    return [dict(row) for row in db.execute(query().order_by(runs.c.id.desc()).limit(100)).mappings()]
+    entries = [dict(row) for row in db.execute(query().order_by(runs.c.id.desc()).limit(100)).mappings()]
+    withdrawal_service.annotate_runs(db, entries)
+    return entries
+
+
+def list_for_case(db, case_id):
+    entries = [
+        dict(row)
+        for row in db.execute(query().where(runs.c.case_id == case_id).order_by(runs.c.id.desc())).mappings()
+    ]
+    withdrawal_service.annotate_runs(db, entries)
+    return entries
 
 
 def enqueue(db, case_id, parameter, actor):

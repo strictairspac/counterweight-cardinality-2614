@@ -43,6 +43,12 @@ docker compose up -d --build --wait
 
 选用「counterweights-2411-calibration.json」对应的演示资料，保存一份复演资料，再以默认参数 2 提交。worker 保存结果摘要、业务明细和 SHA-256。复核员登录后在「复检容量证明」签署。
 
+## 档位实测依据撤回
+
+资料操作员可在资料页或证据页登记某份资料中的一对 `mass`（重量档）与 `slot`（槽宽档）撤回，接口为 `POST /cases/{case_id}/withdrawals`。撤回记录只追加，不修改或删除 `cases.payload`、`runs.result` 与 `reviews` 签章。
+
+读取批次时会按结果中实际查询过的档位对计算有效性：只要证明查过被撤回的档位对，即使 `数据库实测` 为 `0`，`valid`/`handoff_allowed` 也立即为 `false`；只查过其他档位对的批次仍为 `true`。签核会以 run → case 的行锁顺序与撤回登记串行化，撤回生效后返回 409。`GET /runs/{id}/export` 对失效证明返回 409 并保留原结果、签章和撤回档位；`GET /runs/{id}/evidence-bundle` 可读取标注失效的完整回读件。
+
 ## 开发说明
 
 | 部分 | 实现 |

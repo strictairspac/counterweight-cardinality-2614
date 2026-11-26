@@ -16,3 +16,10 @@ class ReviewEntry(ReviewInput):
     run_id: int
     actor: str
     created_at: int
+    valid: bool = True
+    certificate_valid: bool = True
+    invalidated: bool = False
+    revoked: bool = False
+    signature_preserved: bool = True
+    withdrawals: list[dict] = Field(default_factory=list)
+    withdrawn_pairs: list[dict] = Field(default_factory=list)

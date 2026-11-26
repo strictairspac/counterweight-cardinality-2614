@@ -56,5 +56,11 @@ def fail(job_failure):
 
 
 def finish(db, run_id, output):
+    # The queued-run row is already locked by service_one. Acquire the parent
+    # case lock in run -> case order so a concurrent withdrawal has a definite
+    # before/after commit point. Validity is then computed on read.
+    case_id = db.scalar(select(runs.c.case_id).where(runs.c.id == run_id))
+    if case_id is not None:
+        db.execute(select(cases.c.id).where(cases.c.id == case_id).with_for_update()).first()
     db.execute(update(runs).where(runs.c.id == run_id).values(**output, finished_at=int(time())))
     record(db, str(output["status"]), "worker", "run", run_id)
